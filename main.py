@@ -1,6 +1,6 @@
-
-
+from lib.serial_interface import Serial
 
 
 if __name__ == '__main__':
-    pass
+    s = Serial('COM8', boud=115200, timeout=1)
+    print(Serial.list_ports())
