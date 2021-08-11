@@ -1,5 +1,5 @@
-from .device import Device
-from .interfaces import Interface
+from .device import *
+from .interfaces import *
 
 
 class Controller:
@@ -7,9 +7,16 @@ class Controller:
     The class which gui uses to interact with devices
     """
 
-    def __init__(self, device: Device, interface: Interface):
-        self.device = device
-        self.interface = interface
+    def __init__(self, devices: list[Device], interfaces: list[Interface]):
+        self.devices = devices
+        self.interfaces = interfaces
 
-    def send_command(self, command):
-        self.interface.send(command)
+    def get_interface_names(self):
+        return [f.__name__ for f in self.interfaces]
+
+    def get_device_names(self):
+        return [d.name for d in self.devices]
+
+    def connection_init(self, interface: Interface):
+        return interface.list_available_devices()
+
