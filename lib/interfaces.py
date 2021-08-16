@@ -100,7 +100,7 @@ class Serial(Interface):
         :return: list of ports
         """
         import serial.tools.list_ports
-        myports = [tuple(p) for p in list(serial.tools.list_ports.comports(True))]
+        myports = [tuple(p) for p in list(serial.tools.list_ports.comports(False))]
         return myports
 
     @staticmethod
@@ -122,6 +122,21 @@ class Serial(Interface):
         # port_controller = threading.Thread(target=check_presence, args=(arduino_port, 0.1,))
         # port_controller.setDaemon(True)
         # port_controller.start()
+
+    def always_read(self):
+        import time
+        import threading
+
+        def read(ser):
+            while True:
+                o = ser.read_all().decode().split('\r\n')
+                if len(o) > 1:
+                    print(o[:-1])
+                time.sleep(1)
+        x = threading.Thread(target=read, args=(self.ser,), daemon=True)
+        x.start()
+
+
 
 class Bluetooth(Interface):
     def __init__(self):
