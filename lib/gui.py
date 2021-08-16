@@ -31,7 +31,8 @@ class MainWindow(QDialog):
         self.setWindowIcon(QIcon('icon.png'))
 
         # default connection
-        self.log(controller.connection_init(controller.interfaces[self.interface_selector.currentIndex()]))
+        self.interface_selector.setCurrentIndex(0)
+        self.device_selector.setCurrentIndex(0)
 
     def _create_connection_widget(self):
         res = widgets.QGroupBox("Connection")
@@ -39,8 +40,9 @@ class MainWindow(QDialog):
 
         self.interface_selector = widgets.QComboBox()
         self.interface_selector.addItems(self.controller.get_interface_names())
+        self.interface_selector.setCurrentIndex(-1)
         def on_interface_select(index):
-            print(index, self.controller.interfaces[index], "selected")
+            self.log(self.controller.connection_init(self.controller.interfaces[self.interface_selector.currentIndex()]))
         self.interface_selector.currentIndexChanged.connect(on_interface_select)
 
         layout.addWidget(self.interface_selector, 0, 0)
@@ -58,32 +60,41 @@ class MainWindow(QDialog):
 
     def _create_main_widget(self):
         res = widgets.QGroupBox("Commands")
-        main_layout = QGridLayout()
+        main_layout = widgets.QVBoxLayout()
 
         self.device_selector = widgets.QComboBox()
         self.device_selector.addItems(self.controller.get_device_names())
-        def on_device_select(index):
-            print(index, self.controller.devices[index], "selected")
+        self.device_selector.setCurrentIndex(-1)
+        def on_device_select(index, main_window: MainWindow):
+            new_widget = main_window.controller.devices[index].get_widget()
+            if hasattr(main_window, "device_widget"):
+                # main_layout.removeWidget(main_window.device_widget)
+                main_layout.itemAt(1).widget().deleteLater()
+            main_layout.insertWidget(1, new_widget)
+            main_window.device_widget = new_widget
+        self.device_selector.currentIndexChanged.connect(partial(on_device_select, main_window=self))
+        main_layout.addWidget(self.device_selector)
 
-        self.device_selector.currentIndexChanged.connect(on_device_select)
-        main_layout.addWidget(self.device_selector, 0, 0)
-
-        fields = ['Name', 'Familly', 'Age', 'Email', 'Phone Number']
-        form_layout = QFormLayout()
-        qlines = {}
-        for f in fields:
-            qlines[f] = QLineEdit()
-            form_layout.addRow(f, qlines[f])
-
-        start_button = QPushButton("ok")
-        def start_onclick(ffs):
-            self.log(str([ffs[f].text() for f in ffs]), self.ERROR)
+        submit_button = widgets.QPushButton("Start")
+        def submit_onclick():
+            ffs = self.controller.devices[self.device_selector.currentIndex()].fields
             for f in ffs:
                 ffs[f].setEnabled(not ffs[f].isEnabled())
-        start_button.clicked.connect(partial(start_onclick, ffs=qlines))
 
-        main_layout.addLayout(form_layout, 1, 0, len(fields), 3)
-        main_layout.addWidget(start_button, 1+len(fields), 2)
+            if submit_button.text() == "Start":
+                self.log(str(vals), MainWindow.INFO)
+
+                submit_button.setText("Stop")
+                self.rotate_buttons()
+            else:
+                submit_button.setText("Start")
+                self.rotate_buttons()
+        submit_button.clicked.connect(submit_onclick)
+        main_layout.addWidget(submit_button)
+
+
+
+
 
         res.setLayout(main_layout)
         return res
@@ -108,3 +119,8 @@ class MainWindow(QDialog):
 
     def log(self, message, level=INFO):
         self.logger.append(f'<font color="{MainWindow.LOG_COLORS[level]}">' + str(message) + '</font>')
+
+    def rotate_buttons(self):
+        for attr in ["interface_selector", "device_selector"]:
+            if getattr(self, attr, False):
+                getattr(self, attr, False).setEnabled(not getattr(self, attr, False).isEnabled())
