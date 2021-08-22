@@ -1,9 +1,16 @@
 from abc import ABC, abstractmethod
+import time
+import threading
 
 import serial
+import PyQt5.QtWidgets as widgets
+from PyQt5.QtGui import QPalette, QColor
+from functools import partial
 
 
 class Interface(ABC):
+    TERMINATION_CHAR = b'#'
+
     NOT_CONNECTED = 0
     CONNECTED = 1
     CONNECTION_FAILED = 2
@@ -17,7 +24,7 @@ class Interface(ABC):
         self.status = Interface.NOT_CONNECTED
 
     @abstractmethod
-    def open(self):
+    def open(self, **kwargs):
         """
         initiate connection
         :return:
@@ -33,7 +40,7 @@ class Interface(ABC):
         pass
 
     @abstractmethod
-    def send(self, command:str):
+    def send(self, command):
         """
         send any command
         :param command:
@@ -62,23 +69,34 @@ class Interface(ABC):
     def list_available_devices() -> list:
         pass
 
+    @abstractmethod
+    def get_widget(self):
+        pass
+
 
 class Serial(Interface):
-    def __init__(self, port, boud, timeout):
+    def __init__(self, boud=115200, timeout=1):
         super(Serial, self).__init__()
-        self.port = port
-        self.boud = boud
-        self.timeout = timeout
 
-    def open(self):
+        self.defaults = { "Boud": str(boud), "Timeout": str(timeout)}
+
+    def open(self, **kwargs):
         try:
-            self.ser = serial.Serial(self.port, baudrate=self.boud, timeout=self.timeout)
+            port = self.list_available_devices()[self.fields['Devices'].currentRow()][0]
+            boud = self.fields["Boud"].text()
+            timeout = self.fields["Timeout"].text()
+
+            self.ser = serial.Serial(port=port, baudrate=int(boud), timeout=int(timeout))
             self.status = Interface.CONNECTED
             print(f"serial port oppend on {self.ser.name}")
+
+            # self.always_read()
             return True
         except Exception as e:
             self.status = Interface.CONNECTION_FAILED
-            print(e)
+            if "log" in kwargs:
+                kwargs['log'](e)
+                print(e)
             return False
 
     def close(self):
@@ -123,15 +141,48 @@ class Serial(Interface):
         # port_controller.setDaemon(True)
         # port_controller.start()
 
-    def always_read(self):
-        import time
-        import threading
+    def get_widget(self):
+        res = widgets.QWidget()
+        form_layout = widgets.QFormLayout()
 
+        self.fields = {"Devices": widgets.QListWidget(),
+                       "Boud": widgets.QLineEdit(),
+                       "Timeout": widgets.QLineEdit()}
+        self.fields["Boud"].setText(self.defaults["Boud"])
+        self.fields["Timeout"].setText(self.defaults["Timeout"])
+
+        for fk in self.fields:
+            form_layout.addRow(fk, self.fields[fk])
+        self.fields['Devices'].addItems([x[1] for x in self.list_available_devices()])
+        self.fields['Devices'].setMaximumHeight(100)
+
+        # def on_device_click(item):
+        #     sucsess = self.open(port=self.list_available_devices()[self.fields['Devices'].currentRow()][0],
+        #                         boud=self.fields["Boud"].text(), timeout=self.fields["Timeout"].text())
+        #     if sucsess:
+        #         print(dir(item))
+        #         item.setBackground(QColor(0, 255, 0, alpha=250))
+        #         item.setSelected(False)
+        #     else:
+        #         self.fields['Devices'].addItems([x[1] for x in self.list_available_devices()])
+        # self.fields['Devices'].itemDoubleClicked.connect(on_device_click)
+
+        # res = widgets.QLabel()
+        # res.setText(self.name)
+        res.setLayout(form_layout)
+        return res
+
+    def always_read(self):
         def read(ser):
             while True:
-                o = ser.read_all().decode().split('\r\n')
-                if len(o) > 1:
-                    print(o[:-1])
+                # o = ser.read_all().decode().split('\r\n')
+                o = ser.read_all()
+                try:
+                    o = o.decode()
+                except:
+                    pass
+                # if o:
+                print("out: ", o)
                 time.sleep(1)
         x = threading.Thread(target=read, args=(self.ser,), daemon=True)
         x.start()
