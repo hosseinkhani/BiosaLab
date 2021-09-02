@@ -7,6 +7,8 @@ import PyQt5.QtWidgets as widgets
 from PyQt5.QtGui import QPalette, QColor
 from functools import partial
 
+# ToDo: refresh list every 5 sec
+
 
 class Interface(ABC):
     TERMINATION_CHAR = b'#'
@@ -71,6 +73,10 @@ class Interface(ABC):
 
     @abstractmethod
     def get_widget(self):
+        pass
+
+    @abstractmethod
+    def read(self, **kwargs):
         pass
 
 
@@ -172,21 +178,31 @@ class Serial(Interface):
         res.setLayout(form_layout)
         return res
 
-    def always_read(self):
-        def read(ser):
-            while True:
-                # o = ser.read_all().decode().split('\r\n')
-                o = ser.read_all()
-                try:
-                    o = o.decode()
-                except:
-                    pass
-                # if o:
-                print("out: ", o)
-                time.sleep(1)
-        x = threading.Thread(target=read, args=(self.ser,), daemon=True)
-        x.start()
+    # def always_read(self):
+    #     def read(ser):
+    #         while True:
+    #             # o = ser.read_all().decode().split('\r\n')
+    #             o = ser.read_all()
+    #             try:
+    #                 o = o.decode()
+    #             except:
+    #                 pass
+    #             # if o:
+    #             print("out: ", o)
+    #             time.sleep(1)
+    #     x = threading.Thread(target=read, args=(self.ser,), daemon=True)
+    #     x.start()
 
+    def read(self, **kwargs):
+        if kwargs.get('until', None) is None:
+            o = self.ser.read_all()
+        else:
+            o = self.ser.read_until(b'#')
+        try:
+            o = o.decode()
+        except Exception as e:
+            pass
+        return o
 
 
 class Bluetooth(Interface):
