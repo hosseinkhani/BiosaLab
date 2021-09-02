@@ -206,18 +206,15 @@ class CimosDevice(Device):
             last_bit = []
             if vals['Measurment Channel'] == "Left":
                 last_bit.append(' ')
-                self.outputs[' '] = []
             elif vals['Measurment Channel'] == "Right":
                 last_bit.append('1')
-                self.outputs['1'] = []
             elif vals['Measurment Channel'] == "Internal Cap":
                 last_bit.append('0')
-                self.outputs['0'] = []
             elif vals['Measurment Channel'] == "Right&Left":
                 last_bit.append(' ')
-                self.outputs[' '] = []
                 last_bit.append('1')
-                self.outputs['1'] = []
+            for lb in last_bit:
+                self.outputs[lb] = []
 
             repeats = vals['Repeats']
             repeat_interval = vals['Repeat Interval']
@@ -241,8 +238,8 @@ class CimosDevice(Device):
                             o = interface.read(until=Interface.TERMINATION_CHAR).strip(str(Interface.TERMINATION_CHAR))
 
                             # output update
-                            # output[lb].append(np.mean([int(raw)+rep**2 for raw in o.strip(',').split(',')], dtype=int))
-                            output[lb].append(np.mean([int(raw) for raw in o.strip(',').split(',')], dtype=int))
+                            output[lb].append(np.mean([int(raw)+rep**2 for raw in o.strip(',').split(',')], dtype=int))
+                            # output[lb].append(np.mean([int(raw) for raw in o.strip(',').split(',')], dtype=int))
 
                             if self.halt:
                                 self.reset_halt()
@@ -280,8 +277,8 @@ class CimosDevice(Device):
                         o = interface.read(until=Interface.TERMINATION_CHAR).strip(str(Interface.TERMINATION_CHAR))
 
                         # update output
-                        output[lb].append(np.mean([int(raw) for raw in o.strip(',').split(',')], dtype=int))
-                        # output[lb].append(np.mean([int(raw)+rep**2 for raw in o.strip(',').split(',')], dtype=int))
+                        # output[lb].append(np.mean([int(raw) for raw in o.strip(',').split(',')], dtype=int))
+                        output[lb].append(np.mean([int(raw)+rep**2 for raw in o.strip(',').split(',')], dtype=int))
 
                         if self.halt:
                             self.reset_halt()
@@ -317,21 +314,42 @@ class CimosDevice(Device):
                    1057.01, 1059.9, 1070.59, 1073.48, 1078.83, 1081.72, 1101.35, 1104.24, 1109.59, 1112.48, 1123.17,
                    1126.06, 1131.41, 1134.3, 1168.16, 1171.05, 1176.4, 1179.29, 1189.98, 1192.87, 1198.22, 1201.11,
                    1220.74, 1223.63, 1228.98, 1231.87, 1242.56, 1245.45, 1250.8, 1253.69]
+        xlabels = [int(x) for x in xlabels]
         if vals['Plot Type'] == "3D":
-            self.fig, self.ax = plt.subplots(subplot_kw={"projection": "3d"})
-            self.ax.set_zlabel('Number Of Pulses')
-            self.ax.set_zticks(range(0, 5000, 100))
-            self.ax.set_zlim(bottom=-1, top=100)
+            self.fig, self.ax = plt.subplots(1, 2 if vals['Measurment Channel'] == "Right&Left" else 1, subplot_kw={"projection": "3d"})
+            if not isinstance(self.ax, list):
+                self.ax = [self.ax]
+
+            for axis in self.ax:
+                # tmp_planes = self.ax.zaxis._PLANES
+                # self.ax.zaxis._PLANES = (tmp_planes[2], tmp_planes[3],
+                #                          tmp_planes[0], tmp_planes[1],
+                #                          tmp_planes[4], tmp_planes[5])
+
+                # self.ax.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter("{x:.0f}"))
+                axis.set_yticks(range(0, self.vals['Repeats'], self.vals['Repeats']//7))
+                axis.set_ylabel('Time')
+
+                axis.set_zlabel('Number Of Pulses')
+                # self.ax.set_zticks(range(0, 5000, 100))
+                axis.set_zlim(bottom=-1, top=100)
         else:
-            self.fig, self.ax = plt.subplots()
-            self.ax.set_ylabel('Number Of Pulses')
-            self.ax.set_yticks(range(0, 5000, 100))
-            self.ax.set_ylim(bottom=-1, top=100)
+            self.fig, self.ax = plt.subplots(1, 2 if vals['Measurment Channel'] == "Right&Left" else 1)
+            if not isinstance(self.ax, np.ndarray):
+                self.ax = [self.ax]
+
+            for axis in self.ax:
+                axis.set_ylabel('Number Of Pulses')
+                # self.ax.set_yticks(range(0, 5000, 100))
+                axis.set_ylim(bottom=-1, top=100)
             self.fig.subplots_adjust(left=.1, bottom=.25)
-        self.ax.set_xlabel('CR')
-        self.ax.set_xlim(left=-1, right=128)
-        self.ax.set_xticks(range(0, 128, 2))
-        self.ax.set_xticklabels([x for i, x in enumerate(xlabels) if i % 2 == 1], rotation=90, ha='right')
+        for i, axis in enumerate(self.ax):
+            axis.set_xlabel('CR')
+            axis.set_xlim(left=-1, right=128)
+            axis.set_xticks(range(0, 128, 6))
+            axis.set_xticklabels([x for i, x in enumerate(xlabels) if i % 6 == 0], rotation=90, ha='right')
+
+            axis.set_title(f"{self.vals['Measurment Channel'].split('&')[i]} {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}")
 
         mngr = plt.get_current_fig_manager()
         mngr.window.setGeometry(500, 80, 800, 500)
@@ -356,32 +374,36 @@ class CimosDevice(Device):
             if self.vals['Plot Type'] == '3D':
                 for k in [x for x in self.outputs.keys() if not x.endswith("_ind")]:
                     ind = self.outputs.get(f"{k}_ind", 0)
-                    if ind + 1 <= len(self.outputs[k]):
+                    if ind < len(self.outputs[k]):
                         if self.plots.get(k, None) is not None:
                             self.plots[k].remove()
-                        print(self.outputs[k])
 
-                        self.plots[k] = self.ax.scatter(self.vals['Refrence Value'], ind, self.outputs[k][ind], alpha=.99)
+                        self.plots[k] = self.ax.scatter([self.vals['Refrence Value']] * len(self.outputs[k]),
+                                                        range(len(self.outputs[k])), self.outputs[k],
+                                                        cmap=plt.get_cmap('coolwarm'), c=self.outputs[k], alpha=.99)
 
-                        self.ax.set_zbound([-1, max(self.ax.get_zbound()[1], max(self.outputs[k][ind]))])
+                        self.ax.set_zbound([-1, np.max(self.outputs[k])+10])
 
-                        if ind == self.vals['Repeats'] - 1:
+                        if len(self.outputs[k]) == self.vals['Repeats']:
                             self.fig.colorbar(self.plots[k])
 
-                        self.outputs[f"{k}_ind"] = ind+1
+                        self.outputs[f"{k}_ind"] = len(self.outputs[k])
             else:
                 for k in [x for x in self.outputs.keys() if not x.endswith("_ind")]:
                     ind = self.outputs.get(f"{k}_ind", 0)
-                    if ind+1 <= len(self.outputs[k]):
-                        self.ax.scatter(self.vals['Refrence Value'], self.outputs[k][ind], alpha=.5)
-                        self.ax.set_ybound([-1, max(self.ax.get_ybound()[1], self.outputs[k][ind])])
+                    if ind < len(self.outputs[k]):
+                        if self.plots.get(k, None) is not None:
+                            self.plots[k].remove()
 
-                        self.outputs[f"{k}_ind"] = ind+1
+                        self.plots[k] = self.ax.scatter([self.vals['Refrence Value']] * len(self.outputs[k]), self.outputs[k], alpha=.5)
+                        self.ax.set_ybound([-1, np.max(self.outputs[k])+10])
+
+                        self.outputs[f"{k}_ind"] = len(self.outputs[k])
         else:
             if self.vals['Plot Type'] == '3D':
                 for k in [x for x in self.outputs.keys() if not x.endswith("_ind")]:
                     ind = self.outputs.get(f"{k}_ind", 0)
-                    if ind+1 <= len(self.outputs[k]):
+                    if ind < len(self.outputs[k]):
                         if self.plots.get(k, None) is not None:
                             self.plots[k].remove()
 
@@ -389,20 +411,21 @@ class CimosDevice(Device):
                         self.plots[k] = self.ax.plot_surface(x, y, np.array(self.outputs[k]), rstride=2, cstride=2, alpha=.99,
                                                              cmap=plt.get_cmap('coolwarm'), linewidth=100, antialiased=True)
 
-                        self.ax.set_zbound([-1, max(self.ax.get_zbound()[1], max(self.outputs[k][ind]))])
+                        self.ax.set_zbound([-1, np.max(self.outputs[k])+10])
 
-                        if ind == self.vals['Repeats']-1:
+                        if len(self.outputs[k]) == self.vals['Repeats']:
                             self.fig.colorbar(self.plots[k])
 
-                        self.outputs[f"{k}_ind"] = ind+1
+                        self.outputs[f"{k}_ind"] = len(self.outputs[k])
             else:
-                for k in [x for x in self.outputs.keys() if not x.endswith("_ind")]:
+                for ax_ind, k in enumerate([x for x in self.outputs.keys() if not x.endswith("_ind")]):
                     ind = self.outputs.get(f"{k}_ind", 0)
-                    if ind+1 <= len(self.outputs[k]):
-                        self.ax.plot(self.outputs[k][ind], alpha=.5)
-                        self.ax.set_ybound([-1, max(self.ax.get_ybound()[1], max(self.outputs[k][ind]))])
+                    if ind < len(self.outputs[k]):
+                        for i in range(ind, len(self.outputs[k])):
+                            self.ax[ax_ind].plot(self.outputs[k][i], alpha=.5)
+                        self.ax[ax_ind].set_ybound([-1, np.max(self.outputs[k])+10])
 
-                        self.outputs[f"{k}_ind"] = ind+1
+                        self.outputs[f"{k}_ind"] = len(self.outputs[k])
 
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
