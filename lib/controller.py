@@ -12,7 +12,7 @@ class Controller:
         self.interfaces = interfaces
 
     def get_interface_names(self):
-        return [f.__name__ for f in self.interfaces]
+        return [type(f).__name__ for f in self.interfaces]
 
     def get_device_names(self):
         return [d.name for d in self.devices]
