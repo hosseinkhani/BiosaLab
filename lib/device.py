@@ -189,6 +189,8 @@ class CimosDevice(Device):
             vals['reps'] = vals['Stop Time'] // vals['Repeat Interval']
         else:
             vals['reps'] = vals['Repeats']
+        if not vals['reps']:
+            logger.LOG.emit(f"Your config result in an invalid Repeat", INFO)
 
         print(vals)
         self.vals = vals
@@ -200,8 +202,8 @@ class CimosDevice(Device):
         self.plots = {}
 
         def query(interface:Interface, vals, **kwargs):  # whole query management
-            def postprocess(vals):
-                return vals
+            def postprocess(values):
+                return np.mean(values, axis=1, dtype=np.int32)
 
             # logger.LOG.emit(f"Set CCO to {vals['CCO Resolution']}", INFO)
             interface.send(f"G{vals['CCO Resolution']}")
@@ -255,7 +257,7 @@ class CimosDevice(Device):
                             o = interface.read(until=Interface.TERMINATION_CHAR).strip(str(Interface.TERMINATION_CHAR))
 
                             # output update
-                            output[lb].append(np.mean([int(raw) for raw in o.strip(',').split(',')], dtype=int))
+                            output[lb].append([int(raw) for raw in o.strip(',').split(',')])
 
                             if self.halt:
                                 self.reset_halt(logger)
@@ -263,24 +265,25 @@ class CimosDevice(Device):
                             # interface.ser.reset_input_buffer()
                     time_sum = time.time() - time0
 
-                    # right sweep case
-                    if vals.get('refrence_pulse', None):
-                        for r in range(len(output['1'])):  # only the right channel needs it
-                            if output['1'][r] <= vals['refrence_pulse']:
-                                if r == 0:
-                                    output['cide'] = r
-                                else:
-                                    output['cide'] = (1/(output['1'][r]-output['1'][r-1]))*(vals['refrence_pulse']-output['1'][r-1])+(r-1)
-                                break
-                        if 'cide' not in output:
-                            output['cide'] = r
-
                     for k in output:
                         self.outputs[k].append(postprocess(output[k]))
 
+                    # right sweep case
+                    if vals.get('refrence_pulse', None):
+                        for r in range(len(self.outputs['1'])):  # only the right channel needs it
+                            if self.outputs['1'][r] <= vals['refrence_pulse']:
+                                if r == 0:
+                                    self.outputs['cide'] = r
+                                else:
+                                    self.outputs['cide'] = (1 / (self.outputs['1'][r] - self.outputs['1'][r - 1])) * \
+                                                           (vals['refrence_pulse'] - self.outputs['1'][r - 1]) + (r - 1)
+                                break
+                        if 'cide' not in self.outputs:
+                            self.outputs['cide'] = r
+
                     if kwargs.get('output_name', None):
                         for chan in vals['Measurment Channel'].split('&'):
-                            self.save_output(chan, self.outputs[self.CHANNEL_BITS[chan]][-1], kwargs['output_name'])
+                            self.save_output(chan, output[self.CHANNEL_BITS[chan]], kwargs['output_name'])
 
                     if repeat_interval:
                         if repeat_interval > (time.time()-time0):
@@ -310,7 +313,7 @@ class CimosDevice(Device):
                         o = interface.read(until=Interface.TERMINATION_CHAR).strip(str(Interface.TERMINATION_CHAR))
 
                         # update output
-                        output[lb].append(np.mean([int(raw) for raw in o.strip(',').split(',')], dtype=int))
+                        output[lb].append([int(raw) for raw in o.strip(',').split(',')])
 
                         if self.halt:
                             self.reset_halt(logger)
@@ -323,7 +326,7 @@ class CimosDevice(Device):
 
                     if kwargs.get('output_name', None):
                         for chan in vals['Measurment Channel'].split('&'):
-                            self.save_output(chan, self.outputs[self.CHANNEL_BITS[chan]][-1], kwargs['output_name'])
+                            self.save_output(chan, self.outputs[self.CHANNEL_BITS[chan]], kwargs['output_name'])
 
                     if repeat_interval:
                         if repeat_interval > (time.time()-time0):
@@ -335,7 +338,7 @@ class CimosDevice(Device):
                 self.save_last_config(vals)
 
             if kwargs.get('finish_query', True):
-                time.sleep(1)
+                time.sleep(2)
                 self.reset_halt()
 
                 logger.LOG.emit(f"Average time = {time_sum/repeats:.3f} s", INFO)
@@ -466,7 +469,7 @@ class CimosDevice(Device):
                 for axis in self.ax:
                     # self.ax.yaxis.set_major_formatter(matplotlib.ticker.StrMethodFormatter("{x:.0f}"))
                     axis.set_ylabel('Time')
-                    axis.set_yticks(range(0, self.vals['Repeats'], self.vals['Repeats'] // 7))
+                    # axis.set_yticks(range(0, self.vals['Repeats'], self.vals['Repeats'] // 7))
 
                     axis.set_zlabel('Number Of Pulses')
                     # self.ax.set_zticks(range(0, 5000, 100))
@@ -601,10 +604,12 @@ class CimosDevice(Device):
 
     def save_output(self, channel, output, file_name):
         with open(file_name.format(channel=channel), 'a') as out:
-            out.write(','.join([str(x) for x in output])+'\n')
+            out.write(','.join([str(x) for x in np.array(output).flatten()])+'\n')
 
     @pyqtSlot()
     def finalize_query(self):
         self.timer.stop()
+        # for k in self.outputs:
+        #     print(self.outputs[k])
         super(CimosDevice, self).finalize_query()
 

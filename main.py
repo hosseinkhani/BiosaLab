@@ -5,7 +5,8 @@ from lib.gui import *
 
 def main():
     app = QApplication(sys.argv)
-    window = MainWindow(Controller(devices=[CimosDevice(f"device{i}") for i in range(3)], interfaces=[Serial()]))
+    # window = MainWindow(Controller(devices=[CimosDevice(f"device{i}") for i in range(3)], interfaces=[Serial()]))
+    window = MainWindow(Controller(devices=[CimosDevice()], interfaces=[Serial()]))
     window.show()
     sys.exit(app.exec_())
 
