@@ -6,16 +6,16 @@ from PyQt5.QtGui import QPalette, QColor, QIcon
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QPushButton, QLineEdit, QHBoxLayout, QGridLayout, QFormLayout, QDialog
 import PyQt5.QtWidgets as widgets
 
+from .log_level import *
 from .controller import Controller
 from .device import Device
 from .interfaces import Interface
 
 
 class MainWindow(QDialog):
-    INFO = 0
-    ERROR = 1
-    WARNING = 2
     LOG_COLORS = {INFO: "White", ERROR: "Red", WARNING: "Yellow"}
+
+    LOG = pyqtSignal(str, int)
 
     def __init__(self, controller: Controller, parent=None):
         self.controller = controller
@@ -46,6 +46,7 @@ class MainWindow(QDialog):
 
         # signals
         self.current_device().query_finished.connect(self.on_query_finished)
+        self.LOG.connect(self.log)
 
     def _create_connection_box(self):
         res = widgets.QGroupBox("Connection")
@@ -116,7 +117,7 @@ class MainWindow(QDialog):
             if submit_btn.text() == "Start":
                 self.on_query_change(True)
 
-                errors = self.current_device().start_query(self.current_interface())
+                errors = self.current_device().start_query(self.current_interface(), self)
                 if errors:
                     for e in errors:
                         self.log(e, MainWindow.ERROR)
@@ -149,8 +150,9 @@ class MainWindow(QDialog):
         res.setLayout(layout)
         return res
 
+    @pyqtSlot(str, int)
     def log(self, message, level=INFO):
-        self.logger.append(f'<font color="{MainWindow.LOG_COLORS[level]}">' + str(message) + '</font>')
+        self.logger.append(f"<font color='{MainWindow.LOG_COLORS[level]}'>" + str(message) + "</font>")
 
     def current_interface(self) -> Interface:
         return self.controller.interfaces[self.interface_selector.currentIndex()]

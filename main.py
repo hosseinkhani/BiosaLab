@@ -5,12 +5,15 @@ from lib.gui import *
 
 def main():
     app = QApplication(sys.argv)
-    window = MainWindow(Controller(devices=[Device(f"device{i}", {}) for i in range(3)], interfaces=[Serial, Bluetooth, Wifi]))
+    window = MainWindow(Controller(devices=[CimosDevice(f"device{i}") for i in range(3)], interfaces=[Serial()]))
     window.show()
     sys.exit(app.exec_())
 
 
 if __name__ == '__main__':
     main()
-    # s = Serial('COM8', boud=115200, timeout=1)
-    # print(Serial.list_ports())
+    # s = Serial('/dev/ttyACM0', boud=115200, timeout=1)
+    # Device.from_json('./device0.json')
+
+    print(Serial.list_available_devices())
+
